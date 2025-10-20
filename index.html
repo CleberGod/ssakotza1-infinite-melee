@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conclusões & Recompensas — Atualizado</title>
+  <style>
+    :root {
+      --gap: 12px; --pad: 16px; --radius: 14px;
+      --font: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      --primary: #22c55e; --primary-dark: #052e12;
+      --bg-dark: #0f172a; --card-bg: #111827; --card-border: #1f2937;
+      --text: #e2e8f0; --text-muted: #9ca3af;
+    }
+    *{ box-sizing: border-box; }
+    body{
+      font-family: var(--font); margin:0; background: var(--bg-dark); color: var(--text);
+      display:grid; place-items:start; min-height:100svh;
+    }
+    .app{ width:min(900px,94vw); margin:28px auto; display:grid; gap:var(--gap); }
+    .card{ background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius); padding:var(--pad); box-shadow:0 6px 24px rgba(0,0,0,.35) }
+    h1{ font-size:clamp(18px,2.6vw,24px); margin:0 0 4px }
+    .muted{ opacity:.75 } .small{ font-size:12px } .right{ margin-left:auto }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+    .grid{ display:grid; gap:10px }
+    button{
+      cursor:pointer; border:0; border-radius:12px; padding:10px 14px; font-weight:700; transition:all .2s ease;
+    }
+    button:active{ transform:scale(.98) } button:disabled{ opacity:.6; cursor:not-allowed }
+    .primary{ background:var(--primary); color:var(--primary-dark) }
+    .ghost{ background:#0b1220; color:var(--text-muted); border:1px solid var(--card-border) }
+    .warn{ background:#f59e0b; color:#231e07 } .danger{ background:#ef4444; color:#2b0b0b }
+    input[type="number"], input[type="text"]{ background:#0b1220; color:#e5e7eb; border:1px solid var(--card-border); border-radius:10px; padding:10px }
+    label{ font-size:12px; opacity:.85 }
+    .cols{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px }
+    @media (max-width:640px){ .cols{ grid-template-columns:1fr } }
+    .kpis{ display:grid; gap:8px }
+    .kpi{ display:flex; justify-content:space-between; background:#0b1220; border:1px solid var(--card-border); border-radius:12px; padding:10px }
+    .sticky{ position:sticky; top:0; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,.35) }
+    .scrollbox{ max-height: clamp(240px, 42vh, 420px); overflow:auto; padding-right:4px }
+    ul{ list-style:none; padding:0; margin:0; display:grid; gap:8px }
+    li{ background:#0b1220; border:1px solid var(--card-border); border-radius:12px; padding:10px; animation:fadeIn .18s ease }
+    @keyframes fadeIn { from{ opacity:0; transform:translateY(-6px) } to{ opacity:1; transform:translateY(0) } }
+    .status{ color:var(--text-muted) }
+    .toast{ position:fixed; right:14px; bottom:14px; display:grid; gap:8px; width:min(340px,90vw); z-index:40 }
+    .toast .item{ background:#0b1220; border:1px solid var(--card-border); border-radius:10px; padding:10px; opacity:0; transform:translateY(8px); transition:opacity .18s ease, transform .18s ease }
+    .toast .item.show{ opacity:1; transform:translateY(0) }
+    .footerbar{ position:sticky; bottom:0; z-index:15; background:#0f172a80; backdrop-filter:blur(6px); border-top:1px solid var(--card-border); border-radius:12px; padding:8px }
+  </style>
+</head>
+<body>
+  <main class="app" role="main" aria-label="Sistema de conclusões e recompensas">
+    <header class="grid card">
+      <h1>Conclusões & Recompensas</h1>
+      <p class="muted small">Cada <strong>conclusão</strong> concede <strong id="descPremio"></strong>. Você pode personalizar em <em>Configurações</em>.</p>
+      <div class="row">
+        <button id="btnAdd" class="primary" aria-label="Adicionar conclusão (Enter/Espaço)">➕ Adicionar 1</button>
+        <div class="row" style="gap:6px">
+          <label class="small" for="multiQtd">Múltiplas:</label>
+          <input id="multiQtd" type="number" min="1" step="1" value="5" style="width:90px" aria-label="Quantidade para adicionar" />
+          <button id="btnAddMulti" class="ghost" aria-label="Adicionar múltiplas conclusões">➕ Adicionar N</button>
+          <button id="btnAdd5" class="ghost" aria-label="Adicionar 5">+5</button>
+          <button id="btnAdd10" class="ghost" aria-label="Adicionar 10">+10</button>
+        </div>
+        <button id="btnUndo" class="warn" aria-label="Desfazer (Ctrl+Z)">↩️ Desfazer</button>
+        <button id="btnRedo" class="ghost" aria-label="Refazer (Ctrl+Shift+Z)">↪️ Refazer</button>
+        <button id="btnReset" class="danger" aria-label="Resetar tudo">↺ Resetar</button>
+        <span id="status" class="right small status" aria-live="polite"></span>
+      </div>
+    </header>
+
+    <section class="card grid sticky" aria-label="Totais">
+      <h2 class="small muted" style="letter-spacing:.08em;text-transform:uppercase;margin:0">Totais</h2>
+      <div class="kpis" id="totais"></div>
+      <div class="row">
+        <button id="btnCopy" class="ghost">📋 Copiar resumo</button>
+        <button id="btnCSV" class="ghost">⬇️ Exportar CSV</button>
+        <button id="btnConfig" class="ghost right">⚙️ Configurações</button>
+      </div>
+    </section>
+
+    <section class="card grid" aria-label="Histórico">
+      <h2 class="small muted" style="letter-spacing:.08em;text-transform:uppercase;margin:0">Histórico</h2>
+      <div class="scrollbox"><ul id="lista"></ul></div>
+      <p id="vazio" class="muted small">Nenhuma conclusão ainda. Clique em “Adicionar 1” ou utilize “Múltiplas”.</p>
+    </section>
+
+    <section id="config" class="card grid" hidden>
+      <h2 class="small muted" style="letter-spacing:.08em;text-transform:uppercase;margin:0">Configurações</h2>
+      <div class="cols">
+        <div><label for="cfgBooks">Book fragments por conclusão</label><input id="cfgBooks" type="number" min="0" step="1" value="10" /></div>
+        <div><label for="cfgDiamonds">Diamonds por conclusão</label><input id="cfgDiamonds" type="number" min="0" step="1" value="400" /></div>
+        <div><label for="cfgChests">Treasure chests por conclusão</label><input id="cfgChests" type="number" min="0" step="1" value="3" /></div>
+        <div><label for="cfgPartidas">Partidas por conclusão</label><input id="cfgPartidas" type="number" min="0" step="1" value="6" /></div>
+        <div><label for="cfgMin">Minutos por conclusão</label><input id="cfgMin" type="number" min="0" step="1" value="4" /></div>
+      </div>
+      <div class="row">
+        <button id="btnSaveCfg" class="primary">💾 Salvar</button>
+        <button id="btnResetCfg" class="ghost">↺ Padrão</button>
+      </div>
+    </section>
+
+    <div class="footerbar card row">
+      <button id="btnAddFooter" class="primary" style="flex:1">➕ Adicionar</button>
+      <div class="small muted right" id="miniInfo"></div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    (function(){
+      'use strict';
+      // ====== Estado & Persistência ======
+      const DEFAULTS = {books:10, diamonds:400, chests:3, partidas:6, minutes:4};
+      const LS_PREMIO = 'conclusoes_premio_v2';
+      const LS_STATE  = 'conclusoes_state_v2';
+
+      const safeJSON = (s, fallback) => { try{ return JSON.parse(s); }catch{ return fallback; } };
+      const loadPremio = () => ({...DEFAULTS, ...(safeJSON(localStorage.getItem(LS_PREMIO)||'{}', {}))});
+      let premio = loadPremio();
+
+      let state = {
+        n: 0,
+        totals: {books:0, diamonds:0, chests:0, partidas:0, minutes:0},
+        items: [], // cada item guarda os valores vigentes no momento da adição
+        undoStack: []
+      };
+
+      const saved = safeJSON(localStorage.getItem(LS_STATE)||'null', null);
+      if (saved && saved.totals && Array.isArray(saved.items)) state = saved;
+
+      // ====== Utilitários ======
+      const $ = sel => document.querySelector(sel);
+      const els = {
+        lista: $('#lista'), vazio: $('#vazio'), totais: $('#totais'), status: $('#status'),
+        btnAdd: $('#btnAdd'), btnAddFooter: $('#btnAddFooter'), btnAddMulti: $('#btnAddMulti'),
+        multiQtd: $('#multiQtd'), btnAdd5: $('#btnAdd5'), btnAdd10: $('#btnAdd10'),
+        btnUndo: $('#btnUndo'), btnRedo: $('#btnRedo'), btnReset: $('#btnReset'),
+        btnCopy: $('#btnCopy'), btnCSV: $('#btnCSV'), btnConfig: $('#btnConfig'),
+        cfg: $('#config'),
+        cfgBooks: $('#cfgBooks'), cfgDiamonds: $('#cfgDiamonds'), cfgChests: $('#cfgChests'),
+        cfgPartidas: $('#cfgPartidas'), cfgMin: $('#cfgMin'),
+        btnSaveCfg: $('#btnSaveCfg'), btnResetCfg: $('#btnResetCfg'),
+        miniInfo: $('#miniInfo'), toast: $('#toast'),
+        descPremio: $('#descPremio')
+      };
+
+      function fmtRewards(t){ return `${t.books} 📘 book fragments - ${t.diamonds} 💎 diamonds - ${t.chests} 🧰 treasure chests`; }
+      function fmtTime(min){ const h=Math.floor(min/60), m=min%60; return h?`${h}h ${m}m`:`${m}m`; }
+      function save(){ try{ localStorage.setItem(LS_STATE, JSON.stringify(state)); }catch(e){ console.error('Erro ao salvar', e); } }
+
+      function updateDescPremio(){
+        if(els.descPremio) els.descPremio.textContent =
+          `${premio.partidas} partidas • ${premio.books} book fragments • ${premio.diamonds} diamonds • ${premio.chests} treasure chests • ${premio.minutes} minutos`;
+      }
+
+      // ====== Render ======
+      function renderTotals(){
+        const t = state.totals;
+        els.totais.innerHTML = '';
+        const rows = [
+          ['Conclusões', state.n],
+          ['Tempo estimado', fmtTime(t.minutes)],
+          ['Partidas finalizadas', t.partidas],
+          ['Recompensas', fmtRewards(t)]
+        ];
+        for(const [k,v] of rows){
+          const row=document.createElement('div'); row.className='kpi';
+          const left=document.createElement('span'); left.className='muted'; left.textContent=k;
+          const right=document.createElement('strong'); right.textContent=String(v);
+          row.appendChild(left); row.appendChild(right);
+          els.totais.appendChild(row);
+        }
+        els.miniInfo.textContent = `Total: ${state.n} conclusões • ${fmtTime(t.minutes)}`;
+      }
+
+      function renderHistory(){
+        els.lista.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        state.items.forEach((it, i)=>{
+          const li=document.createElement('li');
+          const strong=document.createElement('strong'); strong.textContent = `Conclusão ${i+1}`;
+          const br=document.createElement('br');
+          const text=document.createTextNode(`${it.books} book fragments, ${it.diamonds} diamonds e ${it.chests} treasure chests`);
+          li.appendChild(strong); li.appendChild(br); li.appendChild(text);
+          frag.appendChild(li);
+        });
+        els.lista.appendChild(frag);
+        els.vazio.style.display = state.items.length? 'none' : '';
+      }
+
+      function toast(msg){
+        if(!els.toast) return;
+        const item=document.createElement('div'); item.className='item'; item.textContent=msg;
+        els.toast.appendChild(item);
+        requestAnimationFrame(()=> item.classList.add('show'));
+        setTimeout(()=>{ item.classList.remove('show'); setTimeout(()=> item.remove(), 180); }, 1800);
+      }
+
+      // ====== Ações ======
+      function addOne(custom){
+        const add = custom || premio;
+        state.n += 1;
+        state.totals.books += add.books; state.totals.diamonds += add.diamonds; state.totals.chests += add.chests;
+        state.totals.partidas += add.partidas; state.totals.minutes += add.minutes;
+        state.items.push({...add});
+        state.undoStack.length = 0;
+        els.status.textContent = `+1 conclusão (tempo: ${fmtTime(state.totals.minutes)})`;
+      }
+
+      function addMany(qtd){
+        qtd = Math.max(0, Math.floor(qtd||0));
+        if(!qtd) return;
+        state.n += qtd;
+        state.totals.books += premio.books * qtd;
+        state.totals.diamonds += premio.diamonds * qtd;
+        state.totals.chests += premio.chests * qtd;
+        state.totals.partidas += premio.partidas * qtd;
+        state.totals.minutes += premio.minutes * qtd;
+        const arr = Array.from({length:qtd}, ()=> ({...premio}));
+        state.items.push(...arr);
+        state.undoStack.length = 0;
+        els.status.textContent = `+${qtd} conclusões (tempo: ${fmtTime(state.totals.minutes)})`;
+      }
+
+      function undo(){
+        if(!state.items.length) return;
+        const last = state.items.pop();
+        state.undoStack.push(last);
+        state.n -= 1;
+        state.totals.books -= last.books; state.totals.diamonds -= last.diamonds; state.totals.chests -= last.chests;
+        state.totals.partidas -= last.partidas; state.totals.minutes -= last.minutes;
+        els.status.textContent = `Desfeito 1 (restam ${state.n})`;
+      }
+
+      function redo(){
+        if(!state.undoStack.length) return;
+        const item = state.undoStack.pop();
+        addOne(item);
+      }
+
+      function reset(){
+        if(!confirm('Tem certeza que deseja resetar tudo?')) return;
+        state = { n:0, totals:{books:0,diamonds:0,chests:0,partidas:0,minutes:0}, items:[], undoStack:[] };
+        els.status.textContent = 'Zerado';
+      }
+
+      // ====== Configurações ======
+      function loadCfgToUI(){
+        els.cfgBooks.value = premio.books;
+        els.cfgDiamonds.value = premio.diamonds;
+        els.cfgChests.value = premio.chests;
+        els.cfgPartidas.value = premio.partidas;
+        els.cfgMin.value = premio.minutes;
+      }
+      function saveCfg(){
+        premio = {
+          books: +els.cfgBooks.value||0,
+          diamonds: +els.cfgDiamonds.value||0,
+          chests: +els.cfgChests.value||0,
+          partidas: +els.cfgPartidas.value||0,
+          minutes: +els.cfgMin.value||0,
+        };
+        try{ localStorage.setItem(LS_PREMIO, JSON.stringify(premio)); }catch(e){ console.error('Erro ao salvar cfg', e); }
+        updateDescPremio();
+        toast('Configurações salvas');
+      }
+      function resetCfg(){
+        premio = {...DEFAULTS};
+        try{ localStorage.setItem(LS_PREMIO, JSON.stringify(premio)); }catch{}
+        loadCfgToUI();
+        updateDescPremio();
+        toast('Configurações padrão restauradas');
+      }
+
+      // ====== Exportação ======
+      function exportCSV(){
+        const headers = ['Conclusão','Books','Diamonds','Chests','Partidas','Minutos'];
+        const rows = state.items.map((it,i)=>[i+1,it.books,it.diamonds,it.chests,it.partidas,it.minutes]);
+        const csv = [headers, ...rows].map(r=>r.join(',')).join('\\n');
+        const blob = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'), {href:url, download:'historico.csv'});
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        toast('CSV exportado');
+      }
+      function copyResumo(){
+        const t=state.totals; const text = `Conclusões: ${state.n}\\nTempo: ${fmtTime(t.minutes)}\\nPartidas: ${t.partidas}\\nRecompensas: ${fmtRewards(t)}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(()=> toast('Resumo copiado')).catch(()=> fallbackCopy(text));
+        } else { fallbackCopy(text); }
+        function fallbackCopy(txt){
+          const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
+          ta.select(); try{ document.execCommand('copy'); toast('Resumo copiado'); }catch{} ta.remove();
+        }
+      }
+
+      // ====== Ciclo de render ======
+      function renderAll(){ renderTotals(); renderHistory(); save(); }
+
+      // ====== Eventos ======
+      els.btnAdd.addEventListener('click', ()=>{ addOne(); renderAll(); toast('Conclusão adicionada'); });
+      els.btnAddFooter.addEventListener('click', ()=>{ addOne(); renderAll(); });
+      els.btnAddMulti.addEventListener('click', ()=>{ const n = Math.max(1, +els.multiQtd.value||0); addMany(n); renderAll(); toast(`+${n} adicionadas`); });
+      els.btnAdd5.addEventListener('click', ()=>{ addMany(5); renderAll(); toast('+5 adicionadas'); });
+      els.btnAdd10.addEventListener('click', ()=>{ addMany(10); renderAll(); toast('+10 adicionadas'); });
+      els.btnUndo.addEventListener('click', ()=>{ undo(); renderAll(); });
+      els.btnRedo.addEventListener('click', ()=>{ redo(); renderAll(); });
+      els.btnReset.addEventListener('click', ()=>{ reset(); renderAll(); });
+
+      els.btnConfig.addEventListener('click', ()=>{
+        const v = els.cfg.hasAttribute('hidden');
+        if(v){ loadCfgToUI(); els.cfg.removeAttribute('hidden'); }
+        else { els.cfg.setAttribute('hidden',''); }
+      });
+      els.btnSaveCfg.addEventListener('click', ()=>{ saveCfg(); });
+      els.btnResetCfg.addEventListener('click', ()=>{ resetCfg(); });
+
+      els.btnCSV.addEventListener('click', exportCSV);
+      els.btnCopy.addEventListener('click', copyResumo);
+
+      // Atalhos
+      window.addEventListener('keydown', (e)=>{
+        const active = document.activeElement;
+        if (active && (active.isContentEditable || ['INPUT','TEXTAREA','SELECT','BUTTON'].includes(active.tagName))) return;
+        if (e.key==='Enter' || e.code==='Space'){ e.preventDefault(); addOne(); renderAll(); toast('Conclusão adicionada'); }
+        if (e.ctrlKey && (e.key==='z' || e.key==='Z') && !e.shiftKey){ e.preventDefault(); undo(); renderAll(); }
+        if (e.ctrlKey && e.shiftKey && (e.key==='Z')){ e.preventDefault(); redo(); renderAll(); }
+        if (e.key==='r' || e.key==='R'){ e.preventDefault(); reset(); renderAll(); }
+      });
+
+      // Inicialização
+      function init(){
+        // Migração simples do schema antigo (se existir) — n/total sem items
+        const legacy = safeJSON(localStorage.getItem('conclusoesAppData')||'null', null);
+        if (legacy && !state.items.length && (legacy.n || legacy.total)){
+          // cria itens sintéticos com base no prêmio atual
+          state.n = legacy.n|0;
+          state.totals = legacy.total || state.totals;
+          state.items = Array.from({length: state.n}, ()=> ({...premio}));
+        }
+        updateDescPremio();
+        renderAll();
+        els.status.textContent = 'Versão 2.0 — pronta';
+      }
+      init();
+    })();
+  </script>
+</body>
+</html>
